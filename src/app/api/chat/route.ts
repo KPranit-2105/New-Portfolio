@@ -4,10 +4,15 @@ import { buildPrompt, generateLocalFallbackResponse } from "@/lib/ai/prompts";
 
 export const runtime = "edge";
 
+interface HistoryMessage {
+  role: "user" | "model";
+  text: string;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { message } = body;
+    const { message, history } = body;
 
     // 1. Input Validation
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -27,6 +32,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Sanitize history format
+    const validHistory: HistoryMessage[] = Array.isArray(history)
+      ? history
+          .filter(
+            (h: any) =>
+              h &&
+              typeof h.text === "string" &&
+              (h.role === "user" || h.role === "model")
+          )
+          .slice(-6)
+      : [];
+
     // 2. Structured Retrieval of Verified Portfolio Context
     const retrieval = retrieveRelevantContext(trimmedQuery);
 
@@ -38,9 +55,22 @@ export async function POST(request: Request) {
     // 3. Call Google Gemini LLM if API Key is configured
     if (apiKey) {
       try {
-        const promptPayload = buildPrompt(trimmedQuery, retrieval.formattedContext);
+        const promptPayload = buildPrompt(trimmedQuery, retrieval.formattedContext, validHistory);
 
         const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+        // Build multi-turn contents payload
+        const contents: any[] = [];
+        for (const h of validHistory) {
+          contents.push({
+            role: h.role,
+            parts: [{ text: h.text }],
+          });
+        }
+        contents.push({
+          role: "user",
+          parts: [{ text: promptPayload }],
+        });
 
         const geminiResponse = await fetch(geminiEndpoint, {
           method: "POST",
@@ -48,14 +78,10 @@ export async function POST(request: Request) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: promptPayload }],
-              },
-            ],
+            contents,
             generationConfig: {
               temperature: 0.2, // Low temperature for high factual accuracy
-              maxOutputTokens: 600,
+              maxOutputTokens: 1200,
             },
           }),
         });
@@ -80,7 +106,7 @@ export async function POST(request: Request) {
 
     // 4. Fallback to Local Deterministic Grounding if LLM response unavailable
     if (!answerText) {
-      answerText = generateLocalFallbackResponse(trimmedQuery, retrieval.items);
+      answerText = generateLocalFallbackResponse(trimmedQuery, retrieval.items, validHistory);
     }
 
     // 5. Return Grounded Response with Sources

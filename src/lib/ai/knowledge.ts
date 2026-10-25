@@ -1,10 +1,10 @@
-import { profileData } from "@/data/profile";
-import { projectsData } from "@/data/projects";
-import { skillsData } from "@/data/skills";
-import { experienceData } from "@/data/experience";
-import { certificationsData } from "@/data/certifications";
-import { educationData, achievementsData } from "@/data/education";
-import { Project, Experience, Certification, Skill } from "@/types";
+import { profileData } from "../../data/profile";
+import { projectsData } from "../../data/projects";
+import { skillsData } from "../../data/skills";
+import { experienceData } from "../../data/experience";
+import { certificationsData } from "../../data/certifications";
+import { educationData, achievementsData } from "../../data/education";
+import { Project, Experience, Certification, Skill } from "../../types";
 
 export interface KnowledgeItem {
   id: string;
